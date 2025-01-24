@@ -60,4 +60,6 @@ python your_script_name.py
 
 L'API sera accessible à l'adresse `http://localhost:8000/`.
 
-N'oubliez pas de personnaliser le script selon vos besoins, en particulier le fichier du modèle pré-entrainé et les paramètres du modèle.
+N'oubliez pas de personnaliser le script selon vos besoins, en particulier le fichier du modèle pré-entrainé et les paramètres du modèle.`
+
+Kevin Duranty
