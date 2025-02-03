@@ -1,127 +1,130 @@
-# Import des librairies uvicorn, pickle, FastAPI, File, UploadFile, BaseModel
 from fastapi import FastAPI, File, UploadFile
-import uvicorn
-import numpy as np
-from pydantic import BaseModel
-import pickle
-import pandas as pd
 
-import mlflow
-import os
-
-
-# Création des tags
-tags  = [
+tags = [
     {
-        "name": "Hello",
-        "description": "Hello World"
+        'name' : 'Maths',
+        'description' : 'Operations related to Maths'
     },
     {
-        "name": "Predict Model 1",
-        "description": "Predict"
-    },
-    {
-        "name": "Upload",
-        "description": "Upload : csv file"
-    },
-    {
-        "name": "Root Square",
-        "description": "Root Square"
-    },
-    {
-        "name": "Predict Model - Mlfow",
-        "description": "Root Square"
+        'name' : 'Models',
+        'description' : 'Operations related to Models'
     }
 ]
 
-# Création de l'application
 app = FastAPI(
-    title="API de prédiction",
-    description="API de prédiction",
-    version="1.0.0",
+    title="My FastAPI App",
+    description="This is a simple app",
+    version="0.0.1",
     openapi_tags=tags
 )
 
-# Crédentials d'accès à AWS
-os.environ['AWS_ACCESS_KEY_ID'] = "AKIA3R62MVALHESATEYJ"
-os.environ['AWS_SECRET_ACCESS_KEY'] = "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"
-os.environ['ARTIFACT_STORE_URI'] = "s3://isen-mlflow/models/"
+@app.get("/", tags=['Models'])
+def default_root():
+    return "Hello World"
 
-mlflow.set_tracking_uri("https://isen-mlflow-fae8e0578f2f.herokuapp.com/")
+@app.get("/square", tags=['Maths'])
+def square(n:int=1) -> str:
+    return n*n
 
-logged_model = 'runs:/201bd90bf6e747a4af86e0d0f34511af/model'
+from pydantic import BaseModel
 
-try:loaded_model = mlflow.pyfunc.load_model(logged_model)
-except:loaded_model = None
-
-
-
-# Point de terminaison standard
-@app.get("/", tags=["Hello", "Root Square"], description="Hello World Test")
-def index():
-    return {"message": "Hello World!!!"}
+class Data(BaseModel):
+    name:str='Kevin'
+    city:str='Paris'
 
 
-# Point de terminaison avec paramètre
-@app.get("/hello", tags=["Hello"])
-def hello(name: str='World'):
-    return {"message": f"Hello {name}"}
+@app.post('/formulaire')
+def formulaire(data:Data):
+    
+    data = dict(data)
+
+    name = data['name']
+    city = data['city']
+
+    return f"Hello {name} from {city}."
 
 
-# Point de terminaison avec paramètre optionnel dans l'URL
-@app.get("/hello/{name}", tags=["Hello"])
-def hello(name):
-    return {"message": f"Hello {name}"}
+from fastapi import File, UploadFile
 
-
-# Point de terminaison Post (racine carrée)
-@app.post("/root_square", tags=["Root Square"])
-def root_square(number: int):
-    return {"result": number**0.5}
-
-
-# Création du modèle de données (age, job, marital, education, default, balance, housing, loan, campaign, pdays, previous, poutcome)
-class Credit(BaseModel):
-    age: int
-    job: int
-    marital: int
-    education: int
-    default: int
-    balance: int
-    housing: int
-    loan: int
-    campaign: int
-    pdays: int
-    previous: int
-    poutcome: int
+@app.post('/upload')
+def upload_file(file:UploadFile=File(...)):
+    return file.filename
 
 
 
-# Point de terminaison : Prédiction
-@app.post("/predict", tags=["Predict Model - Mlfow"])
-def predict_mlflow(credit: Credit):
-    predict_value = loaded_model.predict(credit.dict())[0]
-    return {"pred" : str(predict_value)}
+# 0 Chargement du modèle
+
+import pandas as pd
+import mlflow, os
+
+
+os.environ['AWS_ACCESS_KEY_ID'] = ""
+os.environ['AWS_SECRET_ACCESS_KEY'] = ""
+
+mlflow.set_tracking_uri("https://quera-server-mlflow-cda209265623.herokuapp.com/")
+
+path = mlflow.MlflowClient().get_registered_model('Ever_Married').latest_versions[0].source
+model = mlflow.pyfunc.load_model(path)
 
 
 
-# Point de terminaison : Prédiction from MLFLOW
-@app.post("/predict-1", tags=["Predict Model - 1"])
-def predict(credit: Credit):
-    with open('model.pkl', 'rb') as f: model = pickle.load(f)
-    predict_value = int(model.predict([list(credit.dict().values())])[0])
-    return {"pred" : str(predict_value)}
+# 1 Création d'une structure de données
+class User(BaseModel):
+    Gender:str= 'Male'
+    Age:int= 22
+    Graduated:str= 'No'
+    Profession:str= 'Healthcare'
+    Work_Experience:float= 1.0
+    Spending_Score:str= 'Low'
+    Family_Size:float= 4.0
+    Segmentation:str= 'D'
+
+# 2 Création du EndPoint 'predict' qui utilise la structure de données
+@app.post('/predict', tags=['Models'])
+def predict(data:User):
+
+    user = pd.DataFrame([dict(data)])
+    y_pred = model.predict(user)[0]
+
+    # 3 Retour de la prédiction du modèle (int)
+    return int(y_pred)
 
 
-# Point de terminaison qui permet de verser un fichier
-@app.post("/uploadfile", tags=["Upload"])
-def create_upload_file(file: UploadFile = File(...)):
-    df = pd.read_csv(file.file)                                     # Read with pandas
-    with open('model.pkl', 'rb') as f: model = pickle.load(f)
-    pred = model.predict(df)                                        # Prédiction
-    return {"filename": str(pred)}                                  # Retourne le nom du fichier
+@app.post('/predict_file')
+def predict_file(file:UploadFile=File(...)):
+    
+    df = pd.read_csv(file.file)
+
+    if 'Gender' not in df.columns or 'Graduated' not in df.columns:
+        return False
+    
+    else :
+        X = df.drop(["Ever_Married"], axis=1).dropna()
+        y_pred = model.predict(X)
+        print (y_pred)
+        return [int(n) for n in model.predict(X)]
+    
+
+from io import BytesIO
+from PIL import Image
+import numpy as np
 
 
-# Démarage de l'application
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+from io import BytesIO
+from PIL import Image
+import numpy as np
+path = mlflow.MlflowClient().get_registered_model('Tensoflow Model Mnist')._latest_version[0].source
+
+model_loaded = mlflow.pyfunc.load_model(path)
+@app.post('/predict_digit')
+def predict_digit(file:UploadFile=File(...)):
+
+    # Décodage de l'image
+    img = Image.open(BytesIO(file.file.read()))
+
+    # Resize et normalisation de l'image
+    img = (255 - np.array(img.resize((28,28)).convert('L')))/255
+    img = img.reshape(-1, 28,28,1)
+    
+    
+    return {'Prediction': int(model_loaded.predict(img)[0].argmax())}
